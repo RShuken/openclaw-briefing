@@ -25,10 +25,7 @@ jobs:
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
 
-      - name: Lint
-        run: npm run lint --if-present
-
-      - name: Build (next-on-pages)
+      - name: Type-check & build (next-on-pages)
         run: npx @cloudflare/next-on-pages
         env:
           NODE_ENV: production

@@ -21,6 +21,8 @@
     "@types/node": "^20.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "eslint": "^10.1.0",
+    "eslint-config-next": "^16.2.1",
     "typescript": "^5.4.0",
     "wrangler": "^3.0.0"
   }
