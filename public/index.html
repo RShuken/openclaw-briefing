@@ -846,7 +846,7 @@ function render(data) {
           ${t.linear_issue_id ? `<div class="ticket-actions">
             <button class="btn-action btn-revise" onclick="openReviseModal('${escHtml(t.linear_issue_id)}','${escHtml(t.id)}','${escHtml(t.title.replace(/'/g,"\\'")||'')}')">🔄 Revise</button>
             <button class="btn-action btn-defer"  onclick="quickAction('${escHtml(t.linear_issue_id)}','${escHtml(t.id)}','defer')">⏸ Defer</button>
-            <button class="btn-action btn-done"   onclick="quickAction('${escHtml(t.linear_issue_id)}','${escHtml(t.id)}','done')">✅ Done</button>
+            <button class="btn-action btn-done"   onclick="quickAction('${escHtml(t.linear_issue_id)}','${escHtml(t.id)}','done',${t.pr_number||'null'},'${escHtml(t.pr_repo||'')}')">✅ Done</button>
           </div>` : ''}
         </div>
         ${pill('review')}
@@ -1186,22 +1186,51 @@ async function submitRevise(mode = 'queue') {
   }
 }
 
-async function quickAction(linearIssueId, ticketId, action) {
+async function quickAction(linearIssueId, ticketId, action, prNumber, prRepo) {
   const row = document.getElementById('row-' + ticketId);
   const btns = row ? row.querySelectorAll('.btn-action') : [];
   btns.forEach(b => b.disabled = true);
 
   try {
-    const res = await fetch('/api/revise', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ issue_id: linearIssueId, action }),
-    });
-    const data = await res.json();
-    if (data.success) {
-      markRowFeedback(ticketId, action);
+    if (action === 'done') {
+      // Step 1: close Linear ticket
+      const revRes = await fetch('/api/revise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ issue_id: linearIssueId, action: 'done' }),
+      });
+      const revData = await revRes.json();
+      if (!revData.success) throw new Error(revData.error || 'Linear close failed');
+
+      // Step 2: auto-merge associated PR into dev (if pr_number present)
+      if (prNumber && prRepo) {
+        const mergeRes = await fetch('/api/merge-pr', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pr_number: prNumber, pr_repo: prRepo, ticket_id: ticketId }),
+        });
+        const mergeData = await mergeRes.json();
+        if (!mergeData.success) {
+          console.warn('[Done] PR merge failed (ticket still closed):', mergeData.error);
+          markRowFeedback(ticketId, 'done_no_pr');
+          return;
+        }
+        markRowFeedback(ticketId, 'merged');
+      } else {
+        markRowFeedback(ticketId, 'done');
+      }
     } else {
-      throw new Error(data.error || 'Unknown error');
+      const res = await fetch('/api/revise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ issue_id: linearIssueId, action }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        markRowFeedback(ticketId, action);
+      } else {
+        throw new Error(data.error || 'Unknown error');
+      }
     }
   } catch (err) {
     btns.forEach(b => b.disabled = false);
@@ -1214,12 +1243,16 @@ function markRowFeedback(ticketId, action) {
   if (!row) return;
   const labels = {
     done: '✅ Marked done',
+    done_no_pr: '✅ Done (no PR to merge)',
+    merged: '✅ Done · PR merged to dev',
     defer: '⏸ Deferred',
     reassessing: '🔄 Re-queued for tonight',
     working_now: '⚡ Agent working now',
   };
   const colors = {
     done: 'var(--green)',
+    done_no_pr: 'var(--green)',
+    merged: 'var(--green)',
     defer: 'var(--text-muted)',
     reassessing: 'var(--yellow)',
     working_now: '#86efac',
