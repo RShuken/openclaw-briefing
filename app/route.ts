@@ -569,6 +569,7 @@ const HTML = `<!DOCTYPE html>
     <div class="date-badge" id="dateBadge">Loading…</div>
     <div class="sprint-badge" id="sprintStatus">Sprint Active</div>
   </div>
+  <button onclick="logout()" style="padding:5px 12px;background:none;border:1px solid #2a2a2a;border-radius:6px;color:#71717a;font-size:11px;cursor:pointer;" title="Lock briefing">🔒 Lock</button>
 </header>
 
 <nav class="tab-nav">
@@ -1270,51 +1271,12 @@ function markRowFeedback(ticketId, action) {
 loadData();
 </script>
 
-<!-- PIN Gate -->
-<div id="pinOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;">
-  <div style="font-size:28px;font-weight:700;color:#7c3aed;letter-spacing:-0.5px;">🔒 Rel — Briefing</div>
-  <div style="font-size:14px;color:#71717a;">Enter your PIN to continue</div>
-  <input id="pinInput" type="password" inputmode="numeric" maxlength="4" placeholder="••••"
-    style="width:120px;padding:14px;font-size:24px;text-align:center;letter-spacing:8px;background:#161616;border:1px solid #2a2a2a;border-radius:10px;color:#e4e4e7;outline:none;" />
-  <div id="pinError" style="color:#ef4444;font-size:13px;min-height:18px;"></div>
-  <button onclick="checkPin()" style="padding:10px 28px;background:#7c3aed;border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;">Unlock</button>
-</div>
+<!-- Server-side PIN auth via middleware (RSH-190) — no client-side gate needed -->
 <script>
-(function() {
-  const PIN = '1014';
-  const KEY = 'briefing_auth';
-  const TTL = 24 * 60 * 60 * 1000; // 24h
-
-  function isAuthed() {
-    try {
-      const val = sessionStorage.getItem(KEY);
-      if (!val) return false;
-      const { ts } = JSON.parse(val);
-      return Date.now() - ts < TTL;
-    } catch { return false; }
-  }
-
-  if (!isAuthed()) {
-    document.getElementById('pinOverlay').style.display = 'flex';
-    document.getElementById('pinInput').focus();
-    document.getElementById('pinInput').addEventListener('keydown', function(e) {
-      if (e.key === 'Enter') checkPin();
-    });
-  }
-
-  window.checkPin = function() {
-    const input = document.getElementById('pinInput').value;
-    if (input === PIN) {
-      sessionStorage.setItem(KEY, JSON.stringify({ ts: Date.now() }));
-      document.getElementById('pinOverlay').style.display = 'none';
-    } else {
-      document.getElementById('pinError').textContent = 'Incorrect PIN';
-      document.getElementById('pinInput').value = '';
-      document.getElementById('pinInput').focus();
-      setTimeout(() => { document.getElementById('pinError').textContent = ''; }, 2000);
-    }
-  };
-})();
+window.logout = function() {
+  document.cookie = 'briefing_session=; Path=/; Max-Age=0';
+  window.location.href = '/login';
+};
 </script>
 </body>
 </html>
